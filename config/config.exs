@@ -21,13 +21,17 @@ config :social_scribe, Oban,
     {Oban.Plugins.Cron,
      crontab: [
        {"*/2 * * * *", SocialScribe.Workers.BotStatusPoller},
-       {"*/5 * * * *", SocialScribe.Workers.HubspotTokenRefresher}
-     ]}
+        {"*/5 * * * *", SocialScribe.Workers.HubspotTokenRefresher},
+        {"*/5 * * * *", SocialScribe.Workers.SalesforceTokenRefresher}
+      ]}
   ]
 
 config :social_scribe,
   ecto_repos: [SocialScribe.Repo],
   generators: [timestamp_type: :utc_datetime]
+
+config :social_scribe, :hubspot_api, SocialScribe.HubspotApi
+config :social_scribe, :salesforce_api, SocialScribe.SalesforceApi
 
 # Configures the endpoint
 config :social_scribe, SocialScribeWeb.Endpoint,
@@ -99,6 +103,11 @@ config :ueberauth, Ueberauth,
       {Ueberauth.Strategy.Hubspot,
        [
          default_scope: "crm.objects.contacts.read crm.objects.contacts.write oauth"
+       ]},
+    salesforce:
+      {Ueberauth.Strategy.Salesforce,
+       [
+         default_scope: "api refresh_token"
        ]}
   ]
 

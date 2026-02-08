@@ -3,3 +3,35 @@
 @import "tailwindcss/utilities";
 
 /* This file is for your main application CSS */
+
+/* Rich Text Input Placeholder */
+[data-empty="true"]:before {
+  content: attr(data-placeholder);
+  color: #94a3b8;
+  pointer-events: none;
+  position: absolute;
+  left: 1rem;
+  top: 0.75rem;
+}
+
+/* Mention spans in rich text input */
+#message-textarea span[data-mention-name] {
+  cursor: default;
+  user-select: none;
+}
+
+#message-textarea span[data-mention-name]:hover {
+  opacity: 0.8;
+}
+
+/* Contenteditable placeholder */
+[contenteditable]:empty:before {
+  content: attr(data-placeholder);
+  color: #94a3b8;
+  cursor: text;
+}
+
+/* Mention badges in textarea */
+#message-textarea span[data-mention-name] {
+  cursor: default;
+}

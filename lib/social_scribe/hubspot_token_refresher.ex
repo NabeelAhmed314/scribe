@@ -49,10 +49,13 @@ defmodule SocialScribe.HubspotTokenRefresher do
 
     case refresh_token(credential.refresh_token) do
       {:ok, response} ->
+        # HubSpot returns expires_in in seconds; default to 3600 if missing
+        expires_in = response["expires_in"] || 3600
+        
         attrs = %{
           token: response["access_token"],
           refresh_token: response["refresh_token"],
-          expires_at: DateTime.add(DateTime.utc_now(), response["expires_in"], :second)
+          expires_at: DateTime.add(DateTime.utc_now(), expires_in, :second)
         }
 
         Accounts.update_user_credential(credential, attrs)
