@@ -1,4 +1,4 @@
-Technical Implementation Assumptions
+# Technical Implementation Assumptions
 The following architectural and design assumptions were made during the development of the Salesforce integrations to ensure consistency and maintainable code quality:
 
 1. Unified Styling Framework
