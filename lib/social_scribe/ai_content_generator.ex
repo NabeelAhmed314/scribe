@@ -265,7 +265,15 @@ defmodule SocialScribe.AIContentGenerator do
 
     #{if transcripts_text != "", do: "#{transcripts_text}\n\n"}User Question: #{question}
 
-    Provide a clear, concise answer based on the information above. You may use both the CRM contact information and meeting transcripts to answer questions. If the answer cannot be determined from the provided information, say so politely. Consider the conversation history for context when answering follow-up questions.
+    Provide a clear, concise answer based on the information above. You may use both the CRM contact information and meeting transcripts to answer questions.
+
+    When answering questions about what someone said in a meeting:
+    - Look through the meeting transcripts for the person's name
+    - Quote specific statements they made
+    - Reference which meeting and timestamp if available
+    - If you find relevant content, summarize it clearly
+
+    If the answer cannot be determined from the provided information, say so politely and mention what information is missing. Consider the conversation history for context when answering follow-up questions.
     """
   end
 
@@ -298,11 +306,16 @@ defmodule SocialScribe.AIContentGenerator do
 
         transcript_text = meeting.transcript || ""
 
-        transcript_preview =
-          if String.length(transcript_text) > 2000 do
-            String.slice(transcript_text, 0, 2000) <> "\n[Transcript truncated...]"
+        # If transcript is empty, indicate that
+        transcript_display =
+          if transcript_text == "" do
+            "[No transcript content available]"
           else
-            transcript_text
+            if String.length(transcript_text) > 3000 do
+              String.slice(transcript_text, 0, 3000) <> "\n\n[Transcript truncated for length...]"
+            else
+              transcript_text
+            end
           end
 
         """
@@ -311,7 +324,7 @@ defmodule SocialScribe.AIContentGenerator do
         Duration: #{duration_min} minutes
 
         Transcript:
-        #{transcript_preview}
+        #{transcript_display}
         """
       end)
       |> Enum.join("\n\n---\n\n")

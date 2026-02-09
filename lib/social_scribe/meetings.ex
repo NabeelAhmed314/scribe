@@ -148,36 +148,71 @@ defmodule SocialScribe.Meetings do
   end
 
   @doc """
-  Returns meetings for a user where contacts with the given emails participated.
+  Returns meetings for a user where contacts with the given names or emails participated.
   Includes meeting transcripts.
 
   ## Examples
 
-      iex> get_meetings_for_contacts(user, ["john@example.com", "jane@example.com"])
+      iex> get_meetings_for_contacts(user, ["John", "Jane"], ["john@example.com", "jane@example.com"])
       [%Meeting{}, ...]
   """
-  def get_meetings_for_contacts(user, contact_emails) when is_list(contact_emails) do
-    contact_emails = Enum.filter(contact_emails, &(&1 != nil and &1 != ""))
+  def get_meetings_for_contacts(user, contact_names, contact_emails)
+      when is_list(contact_names) and is_list(contact_emails) do
+    # Filter out nil/empty values and normalize for matching
+    names =
+      contact_names
+      |> Enum.filter(&(&1 != nil and &1 != ""))
+      |> Enum.map(&String.downcase(String.trim(&1)))
 
-    if Enum.empty?(contact_emails) do
+    emails =
+      contact_emails
+      |> Enum.filter(&(&1 != nil and &1 != ""))
+      |> Enum.map(&String.downcase(String.trim(&1)))
+
+    # Extract local parts from emails (e.g., "john" from "john@example.com")
+    email_local_parts =
+      emails
+      |> Enum.map(fn email ->
+        case String.split(email, "@") do
+          [local, _] -> local
+          _ -> email
+        end
+      end)
+
+    if Enum.empty?(names) and Enum.empty?(emails) do
       []
     else
-      from(m in Meeting,
-        join: ce in assoc(m, :calendar_event),
-        where: ce.user_id == ^user.id,
-        order_by: [desc: m.recorded_at],
-        preload: [:meeting_transcript, :meeting_participants, :calendar_event]
-      )
-      |> Repo.all()
-      |> Enum.filter(fn meeting ->
+      all_meetings =
+        from(m in Meeting,
+          join: ce in assoc(m, :calendar_event),
+          where: ce.user_id == ^user.id,
+          order_by: [desc: m.recorded_at],
+          preload: [:meeting_transcript, :meeting_participants, :calendar_event]
+        )
+        |> Repo.all()
+
+      Enum.filter(all_meetings, fn meeting ->
         meeting.meeting_participants
         |> Enum.any?(fn participant ->
-          participant_email = String.downcase(participant.name || "")
+          participant_name = String.downcase(String.trim(participant.name || ""))
 
-          Enum.any?(contact_emails, fn email ->
-            String.downcase(email) == participant_email or
-              String.contains?(participant_email, String.downcase(email))
-          end)
+          # Check if participant name matches any contact name
+          name_match =
+            Enum.any?(names, fn name ->
+              participant_name == name or
+                String.contains?(participant_name, name) or
+                String.contains?(name, participant_name)
+            end)
+
+          # Check if participant name matches any email local part
+          email_match =
+            Enum.any?(email_local_parts, fn local ->
+              participant_name == local or
+                String.contains?(participant_name, local) or
+                String.contains?(local, participant_name)
+            end)
+
+          name_match or email_match
         end)
       end)
     end

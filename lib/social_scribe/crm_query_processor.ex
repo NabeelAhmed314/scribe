@@ -73,9 +73,10 @@ defmodule SocialScribe.CrmQueryProcessor do
     if Enum.empty?(contact_details) do
       {:error, :no_contact_data_available}
     else
-      # Fetch meetings with transcripts for these contacts
-      contact_emails = Enum.map(contact_details, & &1.email)
-      meetings = Meetings.get_meetings_for_contacts(user, contact_emails)
+      # Fetch recent meetings for the user to provide context
+      # Get all user meetings instead of filtering by contact names/emails
+      # This allows the AI to find relevant info across all user's meetings
+      meetings = Meetings.list_user_meetings(user)
       meeting_transcripts = extract_meeting_transcripts(meetings)
 
       # Build contact context map with conversation history and meeting data
@@ -213,8 +214,9 @@ defmodule SocialScribe.CrmQueryProcessor do
   defp extract_meeting_transcripts(meetings) do
     meetings
     |> Enum.filter(fn m ->
-      m.meeting_transcript != nil and
-        m.meeting_transcript.content != nil
+      has_transcript = m.meeting_transcript != nil
+      has_content = has_transcript and m.meeting_transcript.content != nil
+      has_transcript and has_content
     end)
     |> Enum.map(fn meeting ->
       transcript_content = meeting.meeting_transcript.content || %{}
