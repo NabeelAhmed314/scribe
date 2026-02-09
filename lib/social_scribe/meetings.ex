@@ -147,6 +147,42 @@ defmodule SocialScribe.Meetings do
     |> Repo.preload([:calendar_event, :recall_bot, :meeting_transcript, :meeting_participants])
   end
 
+  @doc """
+  Returns meetings for a user where contacts with the given emails participated.
+  Includes meeting transcripts.
+
+  ## Examples
+
+      iex> get_meetings_for_contacts(user, ["john@example.com", "jane@example.com"])
+      [%Meeting{}, ...]
+  """
+  def get_meetings_for_contacts(user, contact_emails) when is_list(contact_emails) do
+    contact_emails = Enum.filter(contact_emails, &(&1 != nil and &1 != ""))
+
+    if Enum.empty?(contact_emails) do
+      []
+    else
+      from(m in Meeting,
+        join: ce in assoc(m, :calendar_event),
+        where: ce.user_id == ^user.id,
+        order_by: [desc: m.recorded_at],
+        preload: [:meeting_transcript, :meeting_participants, :calendar_event]
+      )
+      |> Repo.all()
+      |> Enum.filter(fn meeting ->
+        meeting.meeting_participants
+        |> Enum.any?(fn participant ->
+          participant_email = String.downcase(participant.name || "")
+
+          Enum.any?(contact_emails, fn email ->
+            String.downcase(email) == participant_email or
+              String.contains?(participant_email, String.downcase(email))
+          end)
+        end)
+      end)
+    end
+  end
+
   alias SocialScribe.Meetings.MeetingTranscript
 
   @doc """
@@ -343,7 +379,12 @@ defmodule SocialScribe.Meetings do
   Creates a complete meeting record from Recall.ai bot info, transcript data, and participants.
   This should be called when a bot's status is "done".
   """
-  def create_meeting_from_recall_data(%RecallBot{} = recall_bot, bot_api_info, transcript_data, participants_data) do
+  def create_meeting_from_recall_data(
+        %RecallBot{} = recall_bot,
+        bot_api_info,
+        transcript_data,
+        participants_data
+      ) do
     calendar_event = Repo.preload(recall_bot, :calendar_event).calendar_event
 
     Repo.transaction(fn ->
@@ -441,7 +482,6 @@ defmodule SocialScribe.Meetings do
     end
   end
 
-
   @doc """
   Generates a prompt for a meeting.
   """
@@ -524,6 +564,7 @@ defmodule SocialScribe.Meetings do
     total_seconds = trunc(seconds)
     minutes = div(total_seconds, 60)
     secs = rem(total_seconds, 60)
+
     "#{String.pad_leading(Integer.to_string(minutes), 2, "0")}:#{String.pad_leading(Integer.to_string(secs), 2, "0")}"
   end
 

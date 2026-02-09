@@ -8,6 +8,7 @@ defmodule SocialScribe.CrmQueryProcessor do
   alias SocialScribe.SalesforceApiBehaviour, as: SalesforceApi
   alias SocialScribe.AIContentGeneratorApi
   alias SocialScribe.Accounts
+  alias SocialScribe.Meetings
 
   require Logger
 
@@ -72,11 +73,18 @@ defmodule SocialScribe.CrmQueryProcessor do
     if Enum.empty?(contact_details) do
       {:error, :no_contact_data_available}
     else
-      # Build contact context map with conversation history
+      # Fetch meetings with transcripts for these contacts
+      contact_emails = Enum.map(contact_details, & &1.email)
+      meetings = Meetings.get_meetings_for_contacts(user, contact_emails)
+      meeting_transcripts = extract_meeting_transcripts(meetings)
+
+      # Build contact context map with conversation history and meeting data
       contact_context = %{
         contacts: contact_details,
         question: message_text,
-        conversation_history: conversation_history
+        conversation_history: conversation_history,
+        meetings: meetings,
+        meeting_transcripts: meeting_transcripts
       }
 
       # Generate AI response
@@ -199,5 +207,34 @@ defmodule SocialScribe.CrmQueryProcessor do
       {:ok, value} -> value
       :error -> Map.get(map, to_string(key))
     end
+  end
+
+  # Extract formatted transcript text from meetings
+  defp extract_meeting_transcripts(meetings) do
+    meetings
+    |> Enum.filter(fn m ->
+      m.meeting_transcript != nil and
+        m.meeting_transcript.content != nil
+    end)
+    |> Enum.map(fn meeting ->
+      transcript_content = meeting.meeting_transcript.content || %{}
+      transcript_data = transcript_content["data"] || []
+
+      formatted_transcript =
+        transcript_data
+        |> Enum.map_join("\n", fn segment ->
+          speaker = Map.get(segment, "speaker", "Unknown Speaker")
+          words = Map.get(segment, "words", [])
+          text = Enum.map_join(words, " ", &Map.get(&1, "text", ""))
+          "#{speaker}: #{text}"
+        end)
+
+      %{
+        meeting_title: meeting.title,
+        meeting_date: meeting.recorded_at,
+        meeting_duration: meeting.duration_seconds,
+        transcript: formatted_transcript
+      }
+    end)
   end
 end

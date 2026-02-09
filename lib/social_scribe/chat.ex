@@ -20,7 +20,7 @@ defmodule SocialScribe.Chat do
   def list_user_messages(user_id) do
     ChatMessage
     |> where(user_id: ^user_id)
-    |> order_by(desc: :inserted_at)
+    |> order_by(desc: :id)
     |> Repo.all()
   end
 
@@ -36,7 +36,7 @@ defmodule SocialScribe.Chat do
   def list_recent_user_messages(user_id, limit \\ 50) do
     ChatMessage
     |> where(user_id: ^user_id)
-    |> order_by(desc: :inserted_at)
+    |> order_by(desc: :id)
     |> limit(^limit)
     |> Repo.all()
     |> Enum.reverse()

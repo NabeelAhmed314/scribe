@@ -232,7 +232,11 @@ defmodule SocialScribe.AIContentGenerator do
     call_gemini(prompt)
   end
 
-  defp build_crm_query_prompt(question, %{contacts: contacts, conversation_history: history}) do
+  defp build_crm_query_prompt(question, context) do
+    contacts = context.contacts
+    history = Map.get(context, :conversation_history, [])
+    meeting_transcripts = Map.get(context, :meeting_transcripts, [])
+
     contacts_text =
       contacts
       |> Enum.with_index(1)
@@ -250,19 +254,23 @@ defmodule SocialScribe.AIContentGenerator do
     # Build conversation history text if available
     history_text = build_conversation_history_text(history)
 
+    # Build meeting transcripts text if available
+    transcripts_text = build_meeting_transcripts_text(meeting_transcripts)
+
     """
-    You are a helpful CRM assistant. Answer the user's question using ONLY the contact information provided below.
+    You are a helpful CRM assistant. Answer the user's question using the contact information and meeting transcripts provided below.
 
     #{if history_text != "", do: "Conversation History:\n#{history_text}\n\n"}Contact Information:
     #{contacts_text}
 
-    User Question: #{question}
+    #{if transcripts_text != "", do: "#{transcripts_text}\n\n"}User Question: #{question}
 
-    Provide a clear, concise answer based only on the information above. If the answer cannot be determined from the provided contact information, say so politely. Consider the conversation history for context when answering follow-up questions.
+    Provide a clear, concise answer based on the information above. You may use both the CRM contact information and meeting transcripts to answer questions. If the answer cannot be determined from the provided information, say so politely. Consider the conversation history for context when answering follow-up questions.
     """
   end
 
   defp build_conversation_history_text([]), do: ""
+
   defp build_conversation_history_text(history) do
     history
     |> Enum.map(fn msg ->
@@ -270,6 +278,45 @@ defmodule SocialScribe.AIContentGenerator do
       "#{role}: #{msg.content}"
     end)
     |> Enum.join("\n")
+  end
+
+  defp build_meeting_transcripts_text([]), do: ""
+
+  defp build_meeting_transcripts_text(transcripts) do
+    transcripts_text =
+      transcripts
+      |> Enum.with_index(1)
+      |> Enum.map(fn {meeting, index} ->
+        date_str =
+          if meeting.meeting_date do
+            Calendar.strftime(meeting.meeting_date, "%Y-%m-%d %H:%M")
+          else
+            "Unknown date"
+          end
+
+        duration_min = div(meeting.meeting_duration || 0, 60)
+
+        transcript_text = meeting.transcript || ""
+
+        transcript_preview =
+          if String.length(transcript_text) > 2000 do
+            String.slice(transcript_text, 0, 2000) <> "\n[Transcript truncated...]"
+          else
+            transcript_text
+          end
+
+        """
+        Meeting #{index}: #{meeting.meeting_title}
+        Date: #{date_str}
+        Duration: #{duration_min} minutes
+
+        Transcript:
+        #{transcript_preview}
+        """
+      end)
+      |> Enum.join("\n\n---\n\n")
+
+    "Meeting Transcripts:\n\n#{transcripts_text}"
   end
 
   defp format_field_name(:name), do: "Name"

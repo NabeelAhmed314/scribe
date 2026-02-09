@@ -690,8 +690,10 @@ defmodule SocialScribeWeb.ChatLive do
              socket
              |> assign(:messages, updated_messages)
              |> assign(:message_input, "")
+             |> assign(:selected_contacts, [])
              |> assign(:processing, true)
-             |> clear_flash()}
+             |> clear_flash()
+             |> push_event("update_textarea", %{message: "", contacts: []})}
 
           {:error, _changeset} ->
             {:noreply, put_flash(socket, :error, "Failed to send message. Please try again.")}
@@ -1001,6 +1003,7 @@ defmodule SocialScribeWeb.ChatLive do
           "AI response generation failed. Please try again."
 
         _ ->
+          Logger.error("Chat error: #{inspect(reason)}")
           "An error occurred while processing your question. Please try again."
       end
 
