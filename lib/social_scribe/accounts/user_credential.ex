@@ -9,6 +9,7 @@ defmodule SocialScribe.Accounts.UserCredential do
     field :refresh_token, :string
     field :expires_at, :utc_datetime
     field :email, :string
+    field :instance_url, :string
 
     belongs_to :user, SocialScribe.Accounts.User
 
@@ -17,14 +18,21 @@ defmodule SocialScribe.Accounts.UserCredential do
 
   @doc false
   def changeset(user_credential, attrs) do
-    user_credential
-    |> cast(attrs, [:provider, :uid, :token, :refresh_token, :expires_at, :user_id, :email])
-    |> validate_required([:provider, :uid, :token, :expires_at, :user_id, :email])
+    changeset =
+      user_credential
+      |> cast(attrs, [:provider, :uid, :token, :refresh_token, :expires_at, :user_id, :email, :instance_url])
+      |> validate_required([:provider, :uid, :token, :expires_at, :user_id, :email])
+
+    # Require instance_url when provider is salesforce
+    case get_field(changeset, :provider) do
+      "salesforce" -> validate_required(changeset, [:instance_url])
+      _ -> changeset
+    end
   end
 
   def linkedin_changeset(user_credential, attrs) do
     user_credential
-    |> cast(attrs, [:provider, :uid, :token, :refresh_token, :expires_at, :user_id, :email])
+    |> cast(attrs, [:provider, :uid, :token, :refresh_token, :expires_at, :user_id, :email, :instance_url])
     |> validate_required([:provider, :uid, :token, :expires_at, :user_id, :email])
   end
 end

@@ -147,6 +147,77 @@ defmodule SocialScribe.Meetings do
     |> Repo.preload([:calendar_event, :recall_bot, :meeting_transcript, :meeting_participants])
   end
 
+  @doc """
+  Returns meetings for a user where contacts with the given names or emails participated.
+  Includes meeting transcripts.
+
+  ## Examples
+
+      iex> get_meetings_for_contacts(user, ["John", "Jane"], ["john@example.com", "jane@example.com"])
+      [%Meeting{}, ...]
+  """
+  def get_meetings_for_contacts(user, contact_names, contact_emails)
+      when is_list(contact_names) and is_list(contact_emails) do
+    # Filter out nil/empty values and normalize for matching
+    names =
+      contact_names
+      |> Enum.filter(&(&1 != nil and &1 != ""))
+      |> Enum.map(&String.downcase(String.trim(&1)))
+
+    emails =
+      contact_emails
+      |> Enum.filter(&(&1 != nil and &1 != ""))
+      |> Enum.map(&String.downcase(String.trim(&1)))
+
+    # Extract local parts from emails (e.g., "john" from "john@example.com")
+    email_local_parts =
+      emails
+      |> Enum.map(fn email ->
+        case String.split(email, "@") do
+          [local, _] -> local
+          _ -> email
+        end
+      end)
+
+    if Enum.empty?(names) and Enum.empty?(emails) do
+      []
+    else
+      all_meetings =
+        from(m in Meeting,
+          join: ce in assoc(m, :calendar_event),
+          where: ce.user_id == ^user.id,
+          order_by: [desc: m.recorded_at],
+          preload: [:meeting_transcript, :meeting_participants, :calendar_event]
+        )
+        |> Repo.all()
+
+      Enum.filter(all_meetings, fn meeting ->
+        meeting.meeting_participants
+        |> Enum.any?(fn participant ->
+          participant_name = String.downcase(String.trim(participant.name || ""))
+
+          # Check if participant name matches any contact name
+          name_match =
+            Enum.any?(names, fn name ->
+              participant_name == name or
+                String.contains?(participant_name, name) or
+                String.contains?(name, participant_name)
+            end)
+
+          # Check if participant name matches any email local part
+          email_match =
+            Enum.any?(email_local_parts, fn local ->
+              participant_name == local or
+                String.contains?(participant_name, local) or
+                String.contains?(local, participant_name)
+            end)
+
+          name_match or email_match
+        end)
+      end)
+    end
+  end
+
   alias SocialScribe.Meetings.MeetingTranscript
 
   @doc """
@@ -343,7 +414,12 @@ defmodule SocialScribe.Meetings do
   Creates a complete meeting record from Recall.ai bot info, transcript data, and participants.
   This should be called when a bot's status is "done".
   """
-  def create_meeting_from_recall_data(%RecallBot{} = recall_bot, bot_api_info, transcript_data, participants_data) do
+  def create_meeting_from_recall_data(
+        %RecallBot{} = recall_bot,
+        bot_api_info,
+        transcript_data,
+        participants_data
+      ) do
     calendar_event = Repo.preload(recall_bot, :calendar_event).calendar_event
 
     Repo.transaction(fn ->
@@ -441,7 +517,6 @@ defmodule SocialScribe.Meetings do
     end
   end
 
-
   @doc """
   Generates a prompt for a meeting.
   """
@@ -524,6 +599,7 @@ defmodule SocialScribe.Meetings do
     total_seconds = trunc(seconds)
     minutes = div(total_seconds, 60)
     secs = rem(total_seconds, 60)
+
     "#{String.pad_leading(Integer.to_string(minutes), 2, "0")}:#{String.pad_leading(Integer.to_string(secs), 2, "0")}"
   end
 

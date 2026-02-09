@@ -1,0 +1,501 @@
+<div class="h-[calc(100vh-6rem)] flex flex-col max-w-4xl mx-auto">
+  <!-- Header -->
+  <div class="flex items-center justify-between mb-4">
+    <div class="flex items-center gap-4">
+      <h1 class="text-2xl font-semibold text-slate-900">Ask Anything</h1>
+      <div class="flex items-center text-slate-400">
+        <.icon name="hero-chevron-right" class="h-5 w-5" />
+      </div>
+    </div>
+    
+<!-- Tabs -->
+    <div class="flex bg-slate-100 rounded-lg p-1">
+      <button
+        phx-click="switch_tab"
+        phx-value-tab="chat"
+        class={[
+          "px-4 py-1.5 text-sm font-medium rounded-md transition-all",
+          if(@current_tab == "chat",
+            do: "bg-white shadow-sm text-slate-900",
+            else: "text-slate-500 hover:text-slate-700"
+          )
+        ]}
+      >
+        Chat
+      </button>
+      <button
+        phx-click="switch_tab"
+        phx-value-tab="history"
+        class={[
+          "px-4 py-1.5 text-sm font-medium rounded-md transition-all",
+          if(@current_tab == "history",
+            do: "bg-white shadow-sm text-slate-900",
+            else: "text-slate-500 hover:text-slate-700"
+          )
+        ]}
+      >
+        History
+      </button>
+    </div>
+  </div>
+
+  <%= if not @has_crm_connected do %>
+    <div class="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+      <div class="flex items-center">
+        <.icon name="hero-exclamation-triangle" class="h-5 w-5 text-amber-500 mr-2" />
+        <p class="text-amber-800 text-sm">
+          No CRM connected.
+          <a href={~p"/dashboard/settings"} class="underline font-medium">
+            Connect HubSpot or Salesforce
+          </a>
+          to start chatting.
+        </p>
+      </div>
+    </div>
+  <% end %>
+
+  <%= if @current_tab == "chat" do %>
+    <!-- Chat Tab -->
+    <div class="flex-1 flex flex-col bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      
+<!-- Messages Section -->
+      <div class="flex-1 overflow-y-auto p-6" id="messages-container" phx-hook="ScrollToBottom">
+        <%= if Enum.empty?(@messages) and not @processing do %>
+          <div class="h-full flex flex-col items-center justify-center text-center">
+            <p class="text-slate-400 text-sm">
+              I can answer questions about Jump meetings and data - just ask!
+            </p>
+          </div>
+        <% else %>
+          <div class="space-y-6 max-w-3xl mx-auto">
+            <%= for message <- @messages do %>
+              <%= if message.type == "user" do %>
+                <!-- User Message - Right aligned -->
+                <div class="flex flex-col items-end">
+                  <div class="flex items-start gap-2">
+                    <div class="flex flex-col items-end gap-1">
+                      <!-- Tagged contacts above message -->
+                      <%= if not Enum.empty?(get_tagged_contacts(message.metadata)) do %>
+                        <div class="flex items-center gap-1 mb-1">
+                          <%= for contact <- get_tagged_contacts(message.metadata) do %>
+                            <% source = contact[:source] || contact["source"] || "salesforce"
+                               contact_name = contact[:display_name] || contact["display_name"] || contact[:firstname] || contact["firstname"] || "Contact"
+                               badge_class = if source == "hubspot", do: "bg-orange-100 text-orange-700 border-orange-200", else: "bg-blue-100 text-blue-700 border-blue-200" %>
+                            <span class="#{badge_class} px-2 py-0.5 rounded-full text-xs font-medium border inline-block">
+                              {contact_name}
+                            </span>
+                          <% end %>
+                        </div>
+                      <% end %>
+                      <div class="bg-indigo-100 rounded-2xl rounded-tr-sm px-4 py-3 max-w-[85%]">
+                        <p class="text-sm text-slate-800 leading-relaxed">
+                          {raw(
+                            format_mentions_for_display(
+                              message.content,
+                              get_tagged_contacts(message.metadata)
+                            )
+                          )}
+                        </p>
+                      </div>
+                      <span class="text-xs text-slate-400 mt-1 mr-1">
+                        {Calendar.strftime(message.inserted_at, "%I:%M %p")}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              <% else %>
+                <!-- AI Message - Left aligned -->
+                <div class="flex flex-col items-start">
+                  <div class="flex items-start gap-2">
+                    <div class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center flex-shrink-0">
+                      <span class="text-white text-xs font-semibold">AI</span>
+                    </div>
+                    <div class="flex flex-col items-start gap-1">
+                      <%= if not Enum.empty?(get_tagged_contacts(message.metadata)) do %>
+                        <div class="flex items-center gap-1 mb-1">
+                          <%= for contact <- get_tagged_contacts(message.metadata) do %>
+                            <% source = contact[:source] || contact["source"] || "salesforce"
+                               contact_name = contact[:display_name] || contact["display_name"] || contact[:firstname] || contact["firstname"] || "Contact"
+                               badge_class = if source == "hubspot", do: "bg-orange-100 text-orange-700 border-orange-200", else: "bg-blue-100 text-blue-700 border-blue-200" %>
+                            <span class="#{badge_class} px-2 py-0.5 rounded-full text-xs font-medium border inline-block">
+                              {contact_name}
+                            </span>
+                          <% end %>
+                        </div>
+                      <% end %>
+                      <div class="bg-slate-100 rounded-2xl rounded-tl-sm px-4 py-3 max-w-[85%]">
+                        <p class="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
+                          {message.content}
+                        </p>
+                      </div>
+                      <span class="text-xs text-slate-400 mt-1 ml-1">
+                        {Calendar.strftime(message.inserted_at, "%I:%M %p")}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              <% end %>
+            <% end %>
+
+            <%= if @processing do %>
+              <!-- AI Loading Indicator -->
+              <div class="flex items-center gap-2 text-slate-400">
+                <div class="flex gap-1">
+                  <span
+                    class="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"
+                    style="animation-delay: 0ms"
+                  >
+                  </span>
+                  <span
+                    class="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"
+                    style="animation-delay: 150ms"
+                  >
+                  </span>
+                  <span
+                    class="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"
+                    style="animation-delay: 300ms"
+                  >
+                  </span>
+                </div>
+              </div>
+            <% end %>
+          </div>
+        <% end %>
+      </div>
+      
+<!-- Message Input Section -->
+      <div class="p-4 border-t border-slate-100 bg-white">
+        <form phx-submit="send_message" class="max-w-3xl mx-auto">
+          <div class="relative bg-slate-50 rounded-2xl border border-slate-200 focus-within:border-slate-300 focus-within:ring-1 focus-within:ring-slate-200 transition-all">
+            <!-- Add Context Button -->
+            <div class="flex items-center gap-2 px-4 pt-3 pb-2 border-b border-slate-100">
+              <button
+                type="button"
+                phx-click="open_contact_search"
+                class="flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 transition-colors"
+              >
+                <.icon name="hero-plus-circle" class="h-4 w-4" /> Add context
+              </button>
+            </div>
+            
+<!-- Rich Text Input -->
+            <div class="relative">
+              <div
+                id="message-textarea"
+                contenteditable="true"
+                phx-hook="RichTextInput"
+                data-placeholder="Ask anything about your meetings"
+                data-contacts={Jason.encode!(@selected_contacts)}
+                phx-update="ignore"
+                class="w-full px-4 py-3 bg-transparent border-0 focus:ring-0 text-sm text-slate-800 min-h-[80px] max-h-[200px] overflow-y-auto outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400"
+                style="white-space: pre-wrap; word-wrap: break-word;"
+              ></div>
+            </div>
+            
+<!-- Bottom Bar -->
+            <div class="flex items-center justify-between px-4 pb-3 pt-1">
+              <!-- Sources -->
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-slate-500">Sources:</span>
+                <div class="flex items-center gap-1">
+                  <%= for source <- get_unique_sources(@selected_contacts) do %>
+                    <%= if source == "hubspot" do %>
+                      <span
+                        class="w-5 h-5 flex items-center justify-center rounded bg-orange-100 text-orange-600"
+                        title="HubSpot"
+                      >
+                        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M18.164 7.93V5.084a2.198 2.198 0 001.267-1.984 2.21 2.21 0 00-4.418 0c0 .852.49 1.59 1.199 1.951v2.879c-1.035.262-1.86.99-2.215 1.974l-4.452-3.143a2.14 2.14 0 00.078-.566 2.198 2.198 0 00-4.418 0c0 1.035.718 1.903 1.68 2.135v6.032a2.2 2.2 0 104.36 0V9.93c.262-.08.51-.199.734-.354l4.46 3.15a2.19 2.19 0 00-.085.605 2.21 2.21 0 104.418 0 2.198 2.198 0 00-1.436-2.06l.008-.34z" />
+                        </svg>
+                      </span>
+                    <% end %>
+                    <%= if source == "salesforce" do %>
+                      <span
+                        class="w-5 h-5 flex items-center justify-center rounded bg-blue-100 text-blue-600"
+                        title="Salesforce"
+                      >
+                        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M10.006 5.415a4.195 4.195 0 013.045-1.306c1.56 0 2.954.9 3.68 2.29.63-.3 1.33-.465 2.065-.465 2.54 0 4.615 2.034 4.615 4.55 0 2.52-2.075 4.55-4.615 4.55-.295 0-.58-.03-.855-.085a3.357 3.357 0 01-3.145 2.17 3.38 3.38 0 01-1.67-.435 4.424 4.424 0 01-3.85 2.255 4.4 4.4 0 01-4.395-4.4c0-2.14 1.54-3.92 3.57-4.31a4.182 4.182 0 01-.09-.865c0-2.31 1.87-4.18 4.18-4.18.18 0 .355.015.525.04z" />
+                        </svg>
+                      </span>
+                    <% end %>
+                  <% end %>
+                  <%= if Enum.empty?(get_unique_sources(@selected_contacts)) do %>
+                    <span class="text-xs text-slate-400 italic">No sources selected</span>
+                  <% end %>
+                </div>
+              </div>
+              
+<!-- Send Button -->
+              <button
+                type="submit"
+                disabled={
+                  not @has_crm_connected or @message_input == "" or
+                    Enum.empty?(@selected_contacts) or
+                    @processing
+                }
+                class={[
+                  "flex items-center justify-center w-8 h-8 rounded-full transition-colors",
+                  if(
+                    not @has_crm_connected or @message_input == "" or
+                      Enum.empty?(@selected_contacts) or
+                      @processing,
+                    do: "bg-slate-200 text-slate-400 cursor-not-allowed",
+                    else: "bg-slate-800 text-white hover:bg-slate-700"
+                  )
+                ]}
+              >
+                <%= if @processing do %>
+                  <.icon name="hero-arrow-path" class="h-4 w-4 animate-spin" />
+                <% else %>
+                  <.icon name="hero-arrow-up" class="h-4 w-4" />
+                <% end %>
+              </button>
+            </div>
+            
+<!-- Mention Autocomplete Dropdown -->
+            <%= if @mention_dropdown_open and @has_crm_connected do %>
+              <div class="absolute bottom-full left-0 right-0 mb-2 mx-4 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-auto z-50">
+                <%= if @hubspot_searching or @salesforce_searching do %>
+                  <div class="px-4 py-3 text-sm text-slate-500 flex items-center">
+                    <.icon name="hero-arrow-path" class="h-4 w-4 mr-2 animate-spin" />
+                    Searching contacts...
+                  </div>
+                <% else %>
+                  <%= if Enum.empty?(@mention_search_results) do %>
+                    <div class="px-4 py-3 text-sm text-slate-500">
+                      No contacts found matching "{@mention_query}"
+                    </div>
+                  <% else %>
+                    <!-- HubSpot Results -->
+                    <%= mention_hubspot_results = Enum.filter(@mention_search_results, &(&1.source == "hubspot"))
+                      if not Enum.empty?(mention_hubspot_results) do %>
+                      <div class="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider bg-slate-50">
+                        HubSpot
+                      </div>
+                      <%= for contact <- mention_hubspot_results do %>
+                        <button
+                          type="button"
+                          phx-click="select_mention"
+                          phx-value-id={contact.id}
+                          phx-value-source={contact.source}
+                          phx-value-firstname={contact.firstname}
+                          phx-value-lastname={contact.lastname}
+                          phx-value-email={contact.email}
+                          phx-value-company={contact.company}
+                          phx-value-display_name={contact.display_name}
+                          class="w-full px-4 py-2 text-left hover:bg-slate-50 flex items-center gap-3"
+                        >
+                          <.avatar
+                            firstname={contact.firstname}
+                            lastname={contact.lastname}
+                            size={:sm}
+                          />
+                          <div class="flex-1 min-w-0">
+                            <div class="text-sm font-medium text-slate-900 truncate">
+                              {contact.display_name}
+                            </div>
+                            <div class="text-xs text-slate-500 truncate">
+                              {contact.email}
+                            </div>
+                          </div>
+                        </button>
+                      <% end %>
+                    <% end %>
+                    
+<!-- Salesforce Results -->
+                    <%= mention_salesforce_results = Enum.filter(@mention_search_results, &(&1.source == "salesforce"))
+                      if not Enum.empty?(mention_salesforce_results) do %>
+                      <div class="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider bg-slate-50 border-t border-slate-100">
+                        Salesforce
+                      </div>
+                      <%= for contact <- mention_salesforce_results do %>
+                        <button
+                          type="button"
+                          phx-click="select_mention"
+                          phx-value-id={contact.id}
+                          phx-value-source={contact.source}
+                          phx-value-firstname={contact.firstname}
+                          phx-value-lastname={contact.lastname}
+                          phx-value-email={contact.email}
+                          phx-value-company={contact.company}
+                          phx-value-display_name={contact.display_name}
+                          class="w-full px-4 py-2 text-left hover:bg-slate-50 flex items-center gap-3"
+                        >
+                          <.avatar
+                            firstname={contact.firstname}
+                            lastname={contact.lastname}
+                            size={:sm}
+                          />
+                          <div class="flex-1 min-w-0">
+                            <div class="text-sm font-medium text-slate-900 truncate">
+                              {contact.display_name}
+                            </div>
+                            <div class="text-xs text-slate-500 truncate">
+                              {contact.email}
+                            </div>
+                          </div>
+                        </button>
+                      <% end %>
+                    <% end %>
+                  <% end %>
+                <% end %>
+              </div>
+            <% end %>
+          </div>
+        </form>
+      </div>
+    </div>
+  <% else %>
+    <!-- History Tab -->
+    <div class="flex-1 flex flex-col bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="flex-1 overflow-y-auto p-6">
+        <%= if Enum.empty?(@messages) do %>
+          <div class="h-full flex flex-col items-center justify-center text-center">
+            <.icon name="hero-clock" class="h-12 w-12 text-slate-200 mb-4" />
+            <p class="text-slate-400 text-sm">No chat history yet</p>
+            <p class="text-slate-400 text-xs mt-1">Your conversations will appear here</p>
+          </div>
+        <% else %>
+          <div class="space-y-4 max-w-3xl mx-auto w-full">
+            <h2 class="text-lg font-semibold text-slate-800 mb-4">Recent Conversations</h2>
+            <%= for message <- Enum.filter(@messages, &(&1.type == "user")) do %>
+              <div
+                class="p-4 bg-slate-50 rounded-xl border border-slate-100 hover:bg-slate-100 transition-colors cursor-pointer"
+                phx-click="load_conversation"
+                phx-value-message-id={message.id}
+              >
+                <div class="flex items-start justify-between">
+                  <div class="flex-1">
+                    <p class="text-sm text-slate-800 line-clamp-2">
+                      {format_mentions_for_display(
+                        message.content,
+                        get_tagged_contacts(message.metadata)
+                      )}
+                    </p>
+                    <div class="flex items-center gap-1.5 mt-2">
+                      <%= for source <- get_unique_sources(get_tagged_contacts(message.metadata)) do %>
+                        <%= if source == "hubspot" do %>
+                          <span
+                            class="w-5 h-5 flex items-center justify-center rounded bg-orange-100 text-orange-600"
+                            title="HubSpot"
+                          >
+                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M18.164 7.93V5.084a2.198 2.198 0 001.267-1.984 2.21 2.21 0 00-4.418 0c0 .852.49 1.59 1.199 1.951v2.879c-1.035.262-1.86.99-2.215 1.974l-4.452-3.143a2.14 2.14 0 00.078-.566 2.198 2.198 0 00-4.418 0c0 1.035.718 1.903 1.68 2.135v6.032a2.2 2.2 0 104.36 0V9.93c.262-.08.51-.199.734-.354l4.46 3.15a2.19 2.19 0 00-.085.605 2.21 2.21 0 104.418 0 2.198 2.198 0 00-1.436-2.06l.008-.34z" />
+                            </svg>
+                          </span>
+                        <% end %>
+                        <%= if source == "salesforce" do %>
+                          <span
+                            class="w-5 h-5 flex items-center justify-center rounded bg-blue-100 text-blue-600"
+                            title="Salesforce"
+                          >
+                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M10.006 5.415a4.195 4.195 0 013.045-1.306c1.56 0 2.954.9 3.68 2.29.63-.3 1.33-.465 2.065-.465 2.54 0 4.615 2.034 4.615 4.55 0 2.52-2.075 4.55-4.615 4.55-.295 0-.58-.03-.855-.085a3.357 3.357 0 01-3.145 2.17 3.38 3.38 0 01-1.67-.435 4.424 4.424 0 01-3.85 2.255 4.4 4.4 0 01-4.395-4.4c0-2.14 1.54-3.92 3.57-4.31a4.182 4.182 0 01-.09-.865c0-2.31 1.87-4.18 4.18-4.18.18 0 .355.015.525.04z" />
+                            </svg>
+                          </span>
+                        <% end %>
+                      <% end %>
+                    </div>
+                  </div>
+                  <span class="text-xs text-slate-400 whitespace-nowrap ml-4">
+                    {Calendar.strftime(message.inserted_at, "%b %d, %I:%M %p")}
+                  </span>
+                </div>
+              </div>
+            <% end %>
+          </div>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+  
+<!-- Contact Search Modal -->
+  <%= if @show_contact_search do %>
+    <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 overflow-hidden">
+        <div class="flex items-center justify-between p-4 border-b border-slate-100">
+          <h3 class="text-lg font-semibold text-slate-800">Add Contact Context</h3>
+          <button phx-click="close_contact_search" class="text-slate-400 hover:text-slate-600">
+            <.icon name="hero-x-mark" class="h-6 w-6" />
+          </button>
+        </div>
+
+        <div class="p-4">
+          <input
+            type="text"
+            value={@contact_search_query}
+            placeholder="Search contacts..."
+            phx-keyup="search_contacts"
+            phx-debounce="300"
+            class="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+          />
+
+          <%= if @dropdown_open do %>
+            <div class="mt-2 max-h-60 overflow-auto border border-slate-200 rounded-lg">
+              <%= if @searching_contacts do %>
+                <div class="px-4 py-3 text-sm text-slate-500 flex items-center">
+                  <.icon name="hero-arrow-path" class="h-4 w-4 mr-2 animate-spin" /> Searching...
+                </div>
+              <% else %>
+                <%= if Enum.empty?(@contact_search_results) do %>
+                  <div class="px-4 py-3 text-sm text-slate-500">No contacts found</div>
+                <% else %>
+                  <%= for contact <- @contact_search_results do %>
+                    <button
+                      type="button"
+                      phx-click={
+                        JS.push("add_context_contact",
+                          value: %{
+                            id: contact.id,
+                            source: contact.source,
+                            firstname: contact[:firstname] || "",
+                            lastname: contact[:lastname] || "",
+                            email: contact[:email] || "",
+                            company: contact[:company] || "",
+                            display_name: contact[:display_name] || ""
+                          }
+                        )
+                      }
+                      data-testid="add-context-contact-button"
+                      data-contact-id={contact.id}
+                      data-contact-source={contact[:source]}
+                      class="w-full px-4 py-3 text-left hover:bg-slate-50 flex items-center gap-3 border-b border-slate-100 last:border-b-0"
+                    >
+                      <.avatar
+                        firstname={contact[:firstname] || ""}
+                        lastname={contact[:lastname] || ""}
+                        size={:sm}
+                      />
+                      <div class="flex-1 min-w-0">
+                        <div class="text-sm font-medium text-slate-900 truncate">
+                          {contact[:display_name] || ""}
+                        </div>
+                        <div class="text-xs text-slate-500 truncate">{contact[:email] || ""}</div>
+                      </div>
+                      <span class={[
+                        "text-xs px-2 py-1 rounded font-medium",
+                        if(contact[:source] == "hubspot",
+                          do: "bg-orange-100 text-orange-700",
+                          else: "bg-blue-100 text-blue-700"
+                        )
+                      ]}>
+                        {if contact[:source] == "hubspot", do: "HubSpot", else: "Salesforce"}
+                      </span>
+                    </button>
+                  <% end %>
+                <% end %>
+              <% end %>
+            </div>
+          <% end %>
+        </div>
+
+        <div class="p-4 border-t border-slate-100 bg-slate-50">
+          <p class="text-xs text-slate-500">
+            Selected: {length(@selected_contacts)} contacts
+          </p>
+        </div>
+      </div>
+    </div>
+  <% end %>
+</div>

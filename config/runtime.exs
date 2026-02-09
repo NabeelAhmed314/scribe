@@ -41,6 +41,11 @@ config :ueberauth, Ueberauth.Strategy.Hubspot.OAuth,
   client_id: System.get_env("HUBSPOT_CLIENT_ID"),
   client_secret: System.get_env("HUBSPOT_CLIENT_SECRET")
 
+config :ueberauth, Ueberauth.Strategy.Salesforce.OAuth,
+  client_id: System.get_env("SALESFORCE_CLIENT_ID"),
+  client_secret: System.get_env("SALESFORCE_CLIENT_SECRET"),
+  domain: System.get_env("SALESFORCE_DOMAIN", "login.salesforce.com")
+
 if System.get_env("PHX_SERVER") do
   config :social_scribe, SocialScribeWeb.Endpoint, server: true
 end
@@ -58,32 +63,45 @@ if config_env() == :prod do
   # Parse DATABASE_URL for Cloud SQL Unix socket connections
   # Format: ecto://user:pass@localhost/db?socket=/cloudsql/project:region:instance
   uri = URI.parse(database_url)
-  socket_dir = if uri.query do
-    uri.query
-    |> URI.decode_query()
-    |> Map.get("socket")
-  end
 
-  repo_config = if socket_dir do
-    # For Cloud SQL socket connections, configure manually (don't use URL with host)
-    [userinfo_user, userinfo_pass] = String.split(uri.userinfo || ":", ":")
-    database = String.trim_leading(uri.path || "", "/")
+  socket_dir =
+    if uri.query do
+      uri.query
+      |> URI.decode_query()
+      |> Map.get("socket")
+    end
 
-    [
-      username: userinfo_user,
-      password: userinfo_pass,
-      database: database,
-      socket_dir: socket_dir,
-      pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10")
-    ]
-  else
-    # Standard TCP connection
-    [
-      url: database_url,
-      pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
-      socket_options: maybe_ipv6
-    ]
-  end
+  repo_config =
+    if socket_dir do
+      # For Cloud SQL socket connections, configure manually (don't use URL with host)
+      [userinfo_user, userinfo_pass] = String.split(uri.userinfo || ":", ":")
+      database = String.trim_leading(uri.path || "", "/")
+
+      [
+        username: userinfo_user,
+        password: userinfo_pass,
+        database: database,
+        socket_dir: socket_dir,
+        pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10")
+      ]
+    else
+      # Standard TCP connection
+      # SSL is enabled by default in production for security.
+      # Set DATABASE_SSL=false to disable if your database doesn't require SSL.
+      ssl_enabled = System.get_env("DATABASE_SSL", "true") in ~w(true 1)
+
+      # Configure SSL: encrypted connection without certificate verification
+      # This is required for managed databases like Neon PostgreSQL.
+      # For production with certificate verification, set ssl: true and configure cacertfile.
+      ssl_opts = if ssl_enabled, do: [verify: :verify_none], else: false
+
+      [
+        url: database_url,
+        pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
+        socket_options: maybe_ipv6,
+        ssl: ssl_opts
+      ]
+    end
 
   config :social_scribe, SocialScribe.Repo, repo_config
 

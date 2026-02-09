@@ -39,3 +39,10 @@ config :phoenix, :plug_init_mode, :runtime
 # Enable helpful, but potentially expensive runtime checks
 config :phoenix_live_view,
   enable_expensive_runtime_checks: true
+
+# API implementations (can be overridden for mocking)
+config :social_scribe, :hubspot_api, SocialScribe.HubspotApi
+config :social_scribe, :salesforce_api, SocialScribe.SalesforceApi
+
+# Configure Tesla to use mock adapter in tests
+config :tesla, adapter: Tesla.Mock
