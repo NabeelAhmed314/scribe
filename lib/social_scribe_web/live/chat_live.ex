@@ -491,6 +491,17 @@ defmodule SocialScribeWeb.ChatLive do
   end
 
   @impl true
+  def handle_event("new_chat", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:messages, [])
+     |> assign(:message_input, "")
+     |> assign(:selected_contacts, [])
+     |> assign(:current_tab, "chat")
+     |> push_event("update_textarea", %{message: "", contacts: []})}
+  end
+
+  @impl true
   def handle_event("open_contact_search", _params, socket) do
     {:noreply, assign(socket, show_contact_search: true, dropdown_open: true)}
   end
@@ -509,16 +520,6 @@ defmodule SocialScribeWeb.ChatLive do
   def handle_event("load_conversation", %{"message-id" => _message_id}, socket) do
     # Switch to chat tab and could load full conversation thread
     {:noreply, assign(socket, current_tab: "chat")}
-  end
-
-  @impl true
-  def handle_event("update_message", %{"message" => message}, socket) do
-    {:noreply, assign(socket, message_input: message)}
-  end
-
-  @impl true
-  def handle_event("update_message", %{"value" => message}, socket) do
-    {:noreply, assign(socket, message_input: message)}
   end
 
   @impl true

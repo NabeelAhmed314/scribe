@@ -3,53 +3,79 @@
   <div class="flex items-center justify-between mb-4">
     <div class="flex items-center gap-4">
       <h1 class="text-2xl font-semibold text-slate-900">Ask Anything</h1>
-      <div class="flex items-center text-slate-400">
-        <.icon name="hero-chevron-right" class="h-5 w-5" />
-      </div>
+      <button class="flex items-center text-slate-400 hover:text-slate-600 transition-colors">
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        </svg>
+        <svg class="h-4 w-4 -ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
     </div>
     
-<!-- Tabs -->
-    <div class="flex bg-slate-100 rounded-lg p-1">
+<!-- Tabs and New Chat -->
+    <div class="flex items-center gap-3">
+      <div class="flex bg-slate-100 rounded-lg p-1">
+        <button
+          phx-click="switch_tab"
+          phx-value-tab="chat"
+          class={[
+            "px-4 py-1.5 text-sm font-medium rounded-md transition-all",
+            if(@current_tab == "chat",
+              do: "bg-white shadow-sm text-slate-900",
+              else: "text-slate-500 hover:text-slate-700"
+            )
+          ]}
+        >
+          Chat
+        </button>
+        <button
+          phx-click="switch_tab"
+          phx-value-tab="history"
+          class={[
+            "px-4 py-1.5 text-sm font-medium rounded-md transition-all",
+            if(@current_tab == "history",
+              do: "bg-white shadow-sm text-slate-900",
+              else: "text-slate-500 hover:text-slate-700"
+            )
+          ]}
+        >
+          History
+        </button>
+      </div>
       <button
-        phx-click="switch_tab"
-        phx-value-tab="chat"
-        class={[
-          "px-4 py-1.5 text-sm font-medium rounded-md transition-all",
-          if(@current_tab == "chat",
-            do: "bg-white shadow-sm text-slate-900",
-            else: "text-slate-500 hover:text-slate-700"
-          )
-        ]}
+        phx-click="new_chat"
+        class="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all"
+        title="New Chat"
       >
-        Chat
-      </button>
-      <button
-        phx-click="switch_tab"
-        phx-value-tab="history"
-        class={[
-          "px-4 py-1.5 text-sm font-medium rounded-md transition-all",
-          if(@current_tab == "history",
-            do: "bg-white shadow-sm text-slate-900",
-            else: "text-slate-500 hover:text-slate-700"
-          )
-        ]}
-      >
-        History
+        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M12 4v16m8-8H4"
+          />
+        </svg>
       </button>
     </div>
   </div>
 
   <%= if not @has_crm_connected do %>
     <div class="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-      <div class="flex items-center">
-        <.icon name="hero-exclamation-triangle" class="h-5 w-5 text-amber-500 mr-2" />
-        <p class="text-amber-800 text-sm">
-          No CRM connected.
-          <a href={~p"/dashboard/settings"} class="underline font-medium">
-            Connect HubSpot or Salesforce
-          </a>
-          to start chatting.
-        </p>
+      <div class="flex items-start gap-3">
+        <.icon
+          name="hero-exclamation-triangle"
+          class="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0"
+        />
+        <div>
+          <p class="text-amber-800 text-sm font-medium">CRM Connection Required</p>
+          <p class="text-amber-700 text-sm mt-1">
+            Connect your CRM to start asking questions about your contacts.
+            <a href={~p"/dashboard/settings"} class="underline font-medium hover:text-amber-900">
+              Connect HubSpot or Salesforce
+            </a>
+          </p>
+        </div>
       </div>
     </div>
   <% end %>
@@ -79,9 +105,19 @@
                         <div class="flex items-center gap-1 mb-1">
                           <%= for contact <- get_tagged_contacts(message.metadata) do %>
                             <% source = contact[:source] || contact["source"] || "salesforce"
-                               contact_name = contact[:display_name] || contact["display_name"] || contact[:firstname] || contact["firstname"] || "Contact"
-                               badge_class = if source == "hubspot", do: "bg-orange-100 text-orange-700 border-orange-200", else: "bg-blue-100 text-blue-700 border-blue-200" %>
-                            <span class="#{badge_class} px-2 py-0.5 rounded-full text-xs font-medium border inline-block">
+
+                            contact_name =
+                              contact[:display_name] || contact["display_name"] ||
+                                contact[:firstname] || contact["firstname"] || "Contact"
+
+                            badge_classes =
+                              if source == "hubspot",
+                                do: "bg-orange-100 text-orange-700 border-orange-200",
+                                else: "bg-blue-100 text-blue-700 border-blue-200" %>
+                            <span class={[
+                              "px-2 py-0.5 rounded-full text-xs font-medium border inline-block",
+                              badge_classes
+                            ]}>
                               {contact_name}
                             </span>
                           <% end %>
@@ -115,9 +151,19 @@
                         <div class="flex items-center gap-1 mb-1">
                           <%= for contact <- get_tagged_contacts(message.metadata) do %>
                             <% source = contact[:source] || contact["source"] || "salesforce"
-                               contact_name = contact[:display_name] || contact["display_name"] || contact[:firstname] || contact["firstname"] || "Contact"
-                               badge_class = if source == "hubspot", do: "bg-orange-100 text-orange-700 border-orange-200", else: "bg-blue-100 text-blue-700 border-blue-200" %>
-                            <span class="#{badge_class} px-2 py-0.5 rounded-full text-xs font-medium border inline-block">
+
+                            contact_name =
+                              contact[:display_name] || contact["display_name"] ||
+                                contact[:firstname] || contact["firstname"] || "Contact"
+
+                            badge_classes =
+                              if source == "hubspot",
+                                do: "bg-orange-100 text-orange-700 border-orange-200",
+                                else: "bg-blue-100 text-blue-700 border-blue-200" %>
+                            <span class={[
+                              "px-2 py-0.5 rounded-full text-xs font-medium border inline-block",
+                              badge_classes
+                            ]}>
                               {contact_name}
                             </span>
                           <% end %>
@@ -166,15 +212,53 @@
 <!-- Message Input Section -->
       <div class="p-4 border-t border-slate-100 bg-white">
         <form phx-submit="send_message" class="max-w-3xl mx-auto">
-          <div class="relative bg-slate-50 rounded-2xl border border-slate-200 focus-within:border-slate-300 focus-within:ring-1 focus-within:ring-slate-200 transition-all">
-            <!-- Add Context Button -->
-            <div class="flex items-center gap-2 px-4 pt-3 pb-2 border-b border-slate-100">
+          <div class={[
+            "relative rounded-xl border transition-all overflow-hidden",
+            if(@has_crm_connected,
+              do:
+                "bg-white border-slate-200 focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-400",
+              else: "bg-slate-50 border-slate-200"
+            )
+          ]}>
+            <%= if not @has_crm_connected do %>
+              <!-- Disabled Overlay -->
+              <div class="absolute inset-0 bg-slate-50/80 z-10 flex items-center justify-center">
+                <div class="text-center">
+                  <p class="text-sm text-slate-500">Connect a CRM to start chatting</p>
+                  <a
+                    href={~p"/dashboard/settings"}
+                    class="text-sm text-blue-600 hover:text-blue-700 font-medium underline mt-1 inline-block"
+                  >
+                    Connect Now
+                  </a>
+                </div>
+              </div>
+            <% end %>
+            
+<!-- Add Context Button -->
+            <div class="flex items-center gap-2 px-4 pt-3 pb-2">
               <button
                 type="button"
                 phx-click="open_contact_search"
-                class="flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 transition-colors"
+                disabled={not @has_crm_connected}
+                class={[
+                  "flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-md border transition-colors",
+                  if(@has_crm_connected,
+                    do:
+                      "text-slate-600 border-slate-300 hover:border-slate-400 hover:bg-slate-50",
+                    else: "text-slate-400 border-slate-200 cursor-not-allowed"
+                  )
+                ]}
               >
-                <.icon name="hero-plus-circle" class="h-4 w-4" /> Add context
+                <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207"
+                  />
+                </svg>
+                Add context
               </button>
             </div>
             
@@ -184,7 +268,12 @@
                 id="message-textarea"
                 contenteditable="true"
                 phx-hook="RichTextInput"
-                data-placeholder="Ask anything about your meetings"
+                data-placeholder={
+                  if(@has_crm_connected,
+                    do: "Ask anything about your meetings",
+                    else: "Connect a CRM to start asking questions..."
+                  )
+                }
                 data-contacts={Jason.encode!(@selected_contacts)}
                 phx-update="ignore"
                 class="w-full px-4 py-3 bg-transparent border-0 focus:ring-0 text-sm text-slate-800 min-h-[80px] max-h-[200px] overflow-y-auto outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400"
@@ -235,7 +324,7 @@
                     @processing
                 }
                 class={[
-                  "flex items-center justify-center w-8 h-8 rounded-full transition-colors",
+                  "flex items-center justify-center w-8 h-8 rounded-lg transition-colors",
                   if(
                     not @has_crm_connected or @message_input == "" or
                       Enum.empty?(@selected_contacts) or
@@ -248,7 +337,14 @@
                 <%= if @processing do %>
                   <.icon name="hero-arrow-path" class="h-4 w-4 animate-spin" />
                 <% else %>
-                  <.icon name="hero-arrow-up" class="h-4 w-4" />
+                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M5 10l7-7m0 0l7 7m-7-7v18"
+                    />
+                  </svg>
                 <% end %>
               </button>
             </div>

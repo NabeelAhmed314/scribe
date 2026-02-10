@@ -311,9 +311,14 @@ defmodule SocialScribe.Accounts do
 
   @doc """
   Gets the user's HubSpot credential if one exists.
+  Returns the most recently updated credential if multiple exist.
   """
   def get_user_hubspot_credential(user_id) do
-    Repo.get_by(UserCredential, user_id: user_id, provider: "hubspot")
+    UserCredential
+    |> where(user_id: ^user_id, provider: "hubspot")
+    |> order_by(desc: :updated_at)
+    |> limit(1)
+    |> Repo.one()
   end
 
   @doc """
@@ -332,9 +337,14 @@ defmodule SocialScribe.Accounts do
 
   @doc """
   Gets the user's Salesforce credential if one exists.
+  Returns the most recently updated credential if multiple exist.
   """
   def get_user_salesforce_credential(user_id) do
-    Repo.get_by(UserCredential, user_id: user_id, provider: "salesforce")
+    UserCredential
+    |> where(user_id: ^user_id, provider: "salesforce")
+    |> order_by(desc: :updated_at)
+    |> limit(1)
+    |> Repo.one()
   end
 
   defp get_user_by_oauth_uid(provider, uid) do
